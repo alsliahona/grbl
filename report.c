@@ -37,6 +37,7 @@
 #include "report.h"
 #include "print.h"
 #include "settings.h"
+#include "stepper.h"
 #include "nuts_bolts.h"
 #include "gcode.h"
 #include "coolant_control.h"
@@ -337,4 +338,14 @@ void report_realtime_status()
   }
     
   printPgmString(PSTR(">\r\n"));
+}
+
+void report_laser_mode()
+{
+	if(laser_mode_enabled())
+	{
+		printPgmString(PSTR("[$L laser-mode ENABLED z-axis PWM]\r\n"));
+		return;
+	}
+	printPgmString(PSTR("[$L laser-mode DISABLED z-axis normal]\r\n"));
 }

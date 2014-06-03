@@ -41,6 +41,7 @@
 #include "errno.h"
 #include "protocol.h"
 #include "report.h"
+#include "stepper.h"
 
 // Declare gc extern struct
 parser_state_t gc;
@@ -108,6 +109,7 @@ uint8_t gc_execute_line(char *line)
   uint8_t non_modal_action = NON_MODAL_NONE; // Tracks the actions of modal group 0 (non-modal)
   
   float target[3], offset[3];  
+  long lraw_z_value = 0;	// Track for laser control
   clear_vector(target); // XYZ(ABC) axes parameters.
   clear_vector(offset); // IJK Arc offsets are incremental. Value of zero indicates no change.
     
@@ -231,7 +233,7 @@ uint8_t gc_execute_line(char *line)
       case 'L': l = trunc(value); break;
       case 'P': p = value; break;                    
       case 'R': r = to_millimeters(value); break;
-      case 'S': 
+      case 'S':  // @TODO put back to normal, harmless for now
 		  {
 			  int_value = trunc(value);
 			  if(int_value < 0)
@@ -242,7 +244,7 @@ uint8_t gc_execute_line(char *line)
 			  {
 				  int_value = 255;
 			  }
-			  spindle_speed((uint8_t)int_value);
+			  gc.spindle_speed = (uint8_t)int_value;
 		  }
         break;
       case 'T': 
@@ -251,7 +253,20 @@ uint8_t gc_execute_line(char *line)
         break;
       case 'X': target[X_AXIS] = to_millimeters(value); bit_true(axis_words,bit(X_AXIS)); break;
       case 'Y': target[Y_AXIS] = to_millimeters(value); bit_true(axis_words,bit(Y_AXIS)); break;
-      case 'Z': target[Z_AXIS] = to_millimeters(value); bit_true(axis_words,bit(Z_AXIS)); break;
+      case 'Z': 
+		  {
+			  lraw_z_value = (long)value;
+			  if(laser_mode_enabled())
+			  {
+				target[Z_AXIS] = 0;		// Strip out Z axis movement here, but pass the raw value through for laser intensity
+			  }
+			  else
+			  {
+				target[Z_AXIS] = to_millimeters(value);
+			  }
+			  bit_true(axis_words,bit(Z_AXIS));
+		  }
+		  break;
       default: FAIL(STATUS_UNSUPPORTED_STATEMENT);
     }
   }
@@ -342,7 +357,7 @@ uint8_t gc_execute_line(char *line)
             target[i] = gc.position[i];
           }
         }
-        mc_line(target[X_AXIS], target[Y_AXIS], target[Z_AXIS], settings.default_seek_rate, false);
+        mc_line(target[X_AXIS], target[Y_AXIS], target[Z_AXIS], settings.default_seek_rate, false, lraw_z_value, axis_words & Z_AXIS);
       }
       // Retreive G28/30 go-home position data (in machine coordinates) from EEPROM
       float coord_data[N_AXIS];
@@ -351,7 +366,7 @@ uint8_t gc_execute_line(char *line)
       } else {
         if (!settings_read_coord_data(SETTING_INDEX_G28 ,coord_data)) { return(STATUS_SETTING_READ_FAIL); }     
       }      
-      mc_line(coord_data[X_AXIS], coord_data[Y_AXIS], coord_data[Z_AXIS], settings.default_seek_rate, false); 
+      mc_line(coord_data[X_AXIS], coord_data[Y_AXIS], coord_data[Z_AXIS], settings.default_seek_rate, false, lraw_z_value, axis_words & Z_AXIS); 
       memcpy(gc.position, coord_data, sizeof(coord_data)); // gc.position[] = coord_data[];
       axis_words = 0; // Axis words used. Lock out from motion modes by clearing flags.
       break;
@@ -424,7 +439,7 @@ uint8_t gc_execute_line(char *line)
         break;
       case MOTION_MODE_SEEK:
         if (!axis_words) { FAIL(STATUS_INVALID_STATEMENT);} 
-        else { mc_line(target[X_AXIS], target[Y_AXIS], target[Z_AXIS], settings.default_seek_rate, false); }
+        else { mc_line(target[X_AXIS], target[Y_AXIS], target[Z_AXIS], settings.default_seek_rate, false, lraw_z_value, axis_words & Z_AXIS); }
         break;
       case MOTION_MODE_LINEAR:
         // TODO: Inverse time requires F-word with each statement. Need to do a check. Also need
@@ -433,7 +448,7 @@ uint8_t gc_execute_line(char *line)
         // should be efficient and effective.
         if (!axis_words) { FAIL(STATUS_INVALID_STATEMENT);} 
         else { mc_line(target[X_AXIS], target[Y_AXIS], target[Z_AXIS], 
-          (gc.inverse_feed_rate_mode) ? inverse_feed_rate : gc.feed_rate, gc.inverse_feed_rate_mode); }
+          (gc.inverse_feed_rate_mode) ? inverse_feed_rate : gc.feed_rate, gc.inverse_feed_rate_mode, lraw_z_value, axis_words & Z_AXIS); }
         break;
       case MOTION_MODE_CW_ARC: case MOTION_MODE_CCW_ARC:
         // Check if at least one of the axes of the selected plane has been specified. If in center 
@@ -547,7 +562,7 @@ uint8_t gc_execute_line(char *line)
           // Trace the arc
           mc_arc(gc.position, target, offset, gc.plane_axis_0, gc.plane_axis_1, gc.plane_axis_2,
             (gc.inverse_feed_rate_mode) ? inverse_feed_rate : gc.feed_rate, gc.inverse_feed_rate_mode,
-            r, isclockwise);
+            r, isclockwise, lraw_z_value, axis_words & Z_AXIS);
         }            
         break;
     }

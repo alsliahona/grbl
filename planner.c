@@ -349,7 +349,7 @@ void plan_synchronize()
 // All position data passed to the planner must be in terms of machine position to keep the planner 
 // independent of any coordinate system changes and offsets, which are handled by the g-code parser.
 // NOTE: Assumes buffer is available. Buffer checks are handled at a higher level by motion_control.
-void plan_buffer_line(float x, float y, float z, float feed_rate, uint8_t invert_feed_rate) 
+void plan_buffer_line(float x, float y, float z, float feed_rate, uint8_t invert_feed_rate, long lraw_z_value, uint8_t zset) 
 {
   // Prepare to set up new block
   block_t *block = &block_buffer[block_buffer_head];
@@ -369,6 +369,26 @@ void plan_buffer_line(float x, float y, float z, float feed_rate, uint8_t invert
   // Number of steps for each axis
   block->steps_x = labs(target[X_AXIS]-pl.position[X_AXIS]);
   block->steps_y = labs(target[Y_AXIS]-pl.position[Y_AXIS]);
+  //
+  // Plan on z values from 0 to 255 if zset, in z_value -- original z motion stripped at protocol level
+  // in laser mode only
+  block->zset = zset;
+  block->z_value = 0;
+  if(zset)
+  {
+	  if(lraw_z_value > 255)
+	  {
+		  block->z_value = 255;
+	  }
+	  else if(lraw_z_value < 0)
+	  {
+		  block->z_value = 0;
+	  }
+	  else
+	  {
+		block->z_value = (uint8_t)lraw_z_value;
+	  }
+  }
   block->steps_z = labs(target[Z_AXIS]-pl.position[Z_AXIS]);
   block->step_event_count = max(block->steps_x, max(block->steps_y, block->steps_z));
 

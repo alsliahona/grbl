@@ -53,4 +53,9 @@ void st_cycle_reinitialize();
 // Initiates a feed hold of the running program
 void st_feed_hold();
 
+// If enabled Z-axis values are set on PWM pin 11 instead of moving the Z motor
+void set_laser_mode(uint8_t enable);
+
+uint8_t laser_mode_enabled();
+
 #endif

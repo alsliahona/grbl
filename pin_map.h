@@ -50,8 +50,11 @@
   #define Y_DIRECTION_BIT    6  // Uno Digital Pin 6
   #define Z_DIRECTION_BIT    7  // Uno Digital Pin 7
   #define STEP_MASK ((1<<X_STEP_BIT)|(1<<Y_STEP_BIT)|(1<<Z_STEP_BIT)) // All step bits
+  #define STEP_MASK_XY ((1<<X_STEP_BIT)|(1<<Y_STEP_BIT)) // All step bits
   #define DIRECTION_MASK ((1<<X_DIRECTION_BIT)|(1<<Y_DIRECTION_BIT)|(1<<Z_DIRECTION_BIT)) // All direction bits
+  #define DIRECTION_MASK_XY ((1<<X_DIRECTION_BIT)|(1<<Y_DIRECTION_BIT)) // x-y direction bits
   #define STEPPING_MASK (STEP_MASK | DIRECTION_MASK) // All stepping-related bits (step/direction)
+  #define STEPPING_MASK_XY (STEP_MASK_XY | DIRECTION_MASK_XY) // x-y stepping-related bits (step/direction)
 
   #define STEPPERS_DISABLE_DDR    DDRB
   #define STEPPERS_DISABLE_PORT   PORTB
@@ -68,17 +71,18 @@
   #define LIMIT_INT       PCIE0  // Pin change interrupt enable pin
   #define LIMIT_INT_vect  PCINT0_vect 
   #define LIMIT_PCMSK     PCMSK0 // Pin change interrupt register
-#ifdef SPINDLE_SPEEDCONTROL_PIN11
+#ifdef PIN11_PWM_OUTPUT
   #define LIMIT_MASK ((1 << X_LIMIT_BIT)|(1 << Y_LIMIT_BIT)) // X & Y limit bits only, PIN 11 used for PWM spindle speed
 #else
   #define LIMIT_MASK ((1<<X_LIMIT_BIT)|(1<<Y_LIMIT_BIT)|(1<<Z_LIMIT_BIT)) // All limit bits
 #endif
 
-#ifdef SPINDLE_SPEEDCONTROL_PIN11
-  #define SPINDLE_SPEED_DDR   DDRB
-  #define SPINDLE_SPEED_PORT  PORTB
-  #define SPINDLE_SPEED_BIT   3  // Uno Digital Pin 11 (PWM)
+#ifdef PIN11_PWM_OUTPUT
+  #define Z_AXIS_PWM_DDR   DDRB
+  #define Z_AXIS_PWM_PORT  PORTB
+  #define Z_AXIS_PWM_BIT   3  // Uno Digital Pin 11 (PWM)
 #endif
+
   #define SPINDLE_ENABLE_DDR   DDRB
   #define SPINDLE_ENABLE_PORT  PORTB
   #define SPINDLE_ENABLE_BIT   4  // Uno Digital Pin 12

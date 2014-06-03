@@ -62,6 +62,8 @@ static block_t *current_block;  // A pointer to the block currently being traced
 static uint8_t step_pulse_time; // Step pulse reset time after step rise
 static uint8_t out_bits;        // The next stepping-bits to be output
 static volatile uint8_t busy;   // True when SIG_OUTPUT_COMPARE1A is being serviced. Used to avoid retriggering that handler.
+static uint8_t g_laser_mode = 0;
+static uint8_t g_laser_setting = 0;
 
 #if STEP_PULSE_DELAY > 0
   static uint8_t step_bits;  // Stores out_bits output to complete the step pulse delay
@@ -85,6 +87,7 @@ static volatile uint8_t busy;   // True when SIG_OUTPUT_COMPARE1A is being servi
 //  by the trapezoid generator, which is called ACCELERATION_TICKS_PER_SECOND times per second.
 
 static void set_step_events_per_minute(uint32_t steps_per_minute);
+static void pin_11_pwm(uint8_t value);
 
 // Stepper state initialization. Cycle should only start if the st.cycle_start flag is
 // enabled. Startup init and limits call this function but shouldn't start the cycle.
@@ -153,18 +156,18 @@ inline static uint8_t iterate_trapezoid_cycle_counter()
 ISR(TIMER1_COMPA_vect)
 {        
   if (busy) { return; } // The busy-flag is used to avoid reentering this interrupt
-  
+
   // Set the direction pins a couple of nanoseconds before we step the steppers
   STEPPING_PORT = (STEPPING_PORT & ~DIRECTION_MASK) | (out_bits & DIRECTION_MASK);
   // Then pulse the stepping pins
   #ifdef STEP_PULSE_DELAY
     step_bits = (STEPPING_PORT & ~STEP_MASK) | out_bits; // Store out_bits to prevent overwriting.
   #else  // Normal operation
-    STEPPING_PORT = (STEPPING_PORT & ~STEP_MASK) | out_bits;
+	STEPPING_PORT = (STEPPING_PORT & ~STEP_MASK) | out_bits;
   #endif
   // Enable step pulse reset timer so that The Stepper Port Reset Interrupt can reset the signal after
   // exactly settings.pulse_microseconds microseconds, independent of the main Timer1 prescaler.
-#ifdef SPINDLE_SPEEDCONTROL_PIN11
+#ifdef PIN11_PWM_OUTPUT
 	TCNT0 = step_pulse_time; // Reload Timer0 counter
 	TCCR0B = (1 << CS01);    // Begin Timer0. Full speed, 1/8 prescaler
 #else
@@ -218,13 +221,23 @@ ISR(TIMER1_COMPA_vect)
       if (out_bits & (1<<Y_DIRECTION_BIT)) { sys.position[Y_AXIS]--; }
       else { sys.position[Y_AXIS]++; }
     }
-    st.counter_z += current_block->steps_z;
-    if (st.counter_z > 0) {
-      out_bits |= (1<<Z_STEP_BIT);
-      st.counter_z -= st.event_count;
-      if (out_bits & (1<<Z_DIRECTION_BIT)) { sys.position[Z_AXIS]--; }
-      else { sys.position[Z_AXIS]++; }
-    }
+
+	st.counter_z += current_block->steps_z;
+	if (st.counter_z > 0)
+	{
+		out_bits |= (1 << Z_STEP_BIT);
+		st.counter_z -= st.event_count;
+		if (out_bits & (1<<Z_DIRECTION_BIT)) { sys.position[Z_AXIS]--; }
+		else { sys.position[Z_AXIS]++; }
+	}
+
+	if(g_laser_mode && 
+		current_block->zset && 
+		g_laser_setting != current_block->z_value)
+	{
+		g_laser_setting = current_block->z_value;
+		pin_11_pwm(g_laser_setting);		// Adjust laser intensity (but still allow OVF ISR to stop pin pulse on time)
+	}
     
     st.step_events_completed++; // Iterate step events
 
@@ -329,7 +342,7 @@ ISR(TIMER1_COMPA_vect)
 // a few microseconds, if they execute right before one another. Not a big deal, but can
 // cause issues at high step rates if another high frequency asynchronous interrupt is 
 // added to Grbl.
-#ifdef SPINDLE_SPEEDCONTROL_PIN11
+#ifdef PIN11_PWM_OUTPUT
 ISR(TIMER0_OVF_vect)
 {
 	// Reset stepping pins (leave the direction pins)
@@ -384,12 +397,14 @@ void st_init()
   TCCR1A &= ~(3<<COM1A0); 
   TCCR1A &= ~(3<<COM1B0); 
 	
-#ifdef SPINDLE_SPEEDCONTROL_PIN11
+#ifdef PIN11_PWM_OUTPUT
   // Configure Timer 0: Stepper Port Reset Interrupt
   TIMSK0 &= ~((1<<OCIE0B) | (1<<OCIE0A) | (1<<TOIE0)); // Disconnect OC0 outputs and OVF interrupt.
   TCCR0A = 0; // Normal operation
   TCCR0B = 0; // Disable Timer0 until needed
   TIMSK0 |= (1<<TOIE0); // Enable Timer0 overflow interrupt
+  Z_AXIS_PWM_DDR |= (1 << Z_AXIS_PWM_BIT);	// OUTPUT mode on PIN 11
+  Z_AXIS_PWM_PORT &= (1 << Z_AXIS_PWM_BIT);	// Start at 0!
 #ifdef STEP_PULSE_DELAY
   TIMSK0 |= (1<<OCIE0A); // Enable Timer0 Compare Match A interrupt
 #endif
@@ -492,4 +507,39 @@ void st_cycle_reinitialize()
   } else {
     sys.state = STATE_IDLE;
   }
+}
+
+
+void set_laser_mode(uint8_t enable)
+{
+	g_laser_mode = enable;
+}
+
+uint8_t laser_mode_enabled()
+{
+	return g_laser_mode;
+}
+
+void pin_11_pwm(uint8_t value)		// value is analog 0 - 255 (0 to 5v)
+{
+#ifdef PIN11_PWM_OUTPUT
+	Z_AXIS_PWM_DDR |= (1 << Z_AXIS_PWM_BIT);	// OUTPUT mode on PIN 11
+	if(value == 0)
+	{
+		TCCR2A &= ~(1 << COM2A1);  // Output voltage is zero on PIN 11
+		Z_AXIS_PWM_PORT &= ~(1 << Z_AXIS_PWM_BIT);
+		return;
+	}
+	else if(value == 255)
+	{
+		TCCR2A &= ~(1 << COM2A1);  // Output voltage is zero on PIN 11
+		Z_AXIS_PWM_PORT |= (1 << Z_AXIS_PWM_BIT);		// Full on
+		return;
+	}
+	//
+	// Set speed PWM...
+	TCCR2A = (1 << COM2A1) | (1 << WGM21) | (1 << WGM20);
+	TCCR2B = (TCCR2B & 0b11111000) | 0x02; // set to 1/8 Prescaler
+	OCR2A = value;
+#endif
 }

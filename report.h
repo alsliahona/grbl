@@ -87,4 +87,6 @@ void report_gcode_modes();
 // Prints startup line
 void report_startup_line(uint8_t n, char *line);
 
+// Print laser mode (z-axis on PWM pin 11, not motor)
+void report_laser_mode();
 #endif

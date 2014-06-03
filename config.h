@@ -37,7 +37,7 @@
 #define config_h
 
 // Default settings. Used when resetting EEPROM. Change to desired name in defaults.h
-#define DEFAULTS_GENERIC
+#define DEFAULTS_SHAPEOKO_2
 
 // Serial baud rate
 #define BAUD_RATE 9600
@@ -47,11 +47,15 @@
 #define PIN_MAP_ARDUINO_UNO
 
 //
-// Enable PWM spindle speed control on PIN 11
+// Enable PWM on PIN 11 as an alternative to Z-axis motor drive
+// Laser intensity can be set using the Z-axis in gcode with software like PicLaser Lite (picengrave.com)
+// but spindle speed control timing is inadequate, so instead when this #define is enabled
+// and when the $L1 command is sent, PIN 11 PWM will be set to match the Z-axis (0-254) value
+// instead of controlling the Z-axis motor.  $L0 will disable "laser mode."
 // This also causes the stepper to use Timer 0 instead of Timer 2 (overflow)
 // to avoid conflicts with Timer 2 which is needed for PWM
 // This also means PIN 11 is no longer available for a Z-limit switch
-#define SPINDLE_SPEEDCONTROL_PIN11
+#define PIN11_PWM_OUTPUT
 
 // Define runtime command special characters. These characters are 'picked-off' directly from the
 // serial read data stream and are not passed to the grbl line execution parser. Select characters

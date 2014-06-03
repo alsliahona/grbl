@@ -41,6 +41,8 @@ typedef struct {
 
   // Fields used by the bresenham algorithm for tracing the line
   uint8_t  direction_bits;            // The direction bit set for this block (refers to *_DIRECTION_BIT in config.h)
+  uint8_t z_value;						// Used for $L1 laser mode to set z value as laser intensity instead of motor movement
+  uint8_t zset;							// ditto
   uint32_t steps_x, steps_y, steps_z; // Step count along each axis
   int32_t  step_event_count;          // The number of step events required to complete this block
 
@@ -68,7 +70,7 @@ void plan_init();
 // Add a new linear movement to the buffer. x, y and z is the signed, absolute target position in 
 // millimaters. Feed rate specifies the speed of the motion. If feed rate is inverted, the feed
 // rate is taken to mean "frequency" and would complete the operation in 1/feed_rate minutes.
-void plan_buffer_line(float x, float y, float z, float feed_rate, uint8_t invert_feed_rate);
+void plan_buffer_line(float x, float y, float z, float feed_rate, uint8_t invert_feed_rate, long lraw_z_value, uint8_t zset);
 
 // Called when the current block is no longer needed. Discards the block and makes the memory
 // availible for new blocks.
