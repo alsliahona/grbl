@@ -41,6 +41,7 @@ static block_t block_buffer[BLOCK_BUFFER_SIZE];  // A ring buffer for motion ins
 static volatile uint8_t block_buffer_head;       // Index of the next block to be pushed
 static volatile uint8_t block_buffer_tail;       // Index of the block to process now
 static uint8_t next_buffer_head;                 // Index of the next buffer head
+static uint8_t g_current_zvalue;				 // For laser-mode track Z value
 
 // Define planner variables
 typedef struct {
@@ -311,6 +312,7 @@ void plan_init()
 {
   plan_reset_buffer();
   memset(&pl, 0, sizeof(pl)); // Clear planner struct
+  g_current_zvalue = 0;
 }
 
 void plan_discard_current_block() 
@@ -372,23 +374,23 @@ void plan_buffer_line(float x, float y, float z, float feed_rate, uint8_t invert
   //
   // Plan on z values from 0 to 255 if zset, in z_value -- original z motion stripped at protocol level
   // in laser mode only
-  block->zset = zset;
-  block->z_value = 0;
   if(zset)
   {
+	  // Update global...
 	  if(lraw_z_value > 255)
 	  {
-		  block->z_value = 255;
+		  g_current_zvalue = 255;
 	  }
 	  else if(lraw_z_value < 0)
 	  {
-		  block->z_value = 0;
+		  g_current_zvalue = 0;
 	  }
 	  else
 	  {
-		block->z_value = (uint8_t)lraw_z_value;
+		  g_current_zvalue = (uint8_t)lraw_z_value;
 	  }
   }
+  block->z_value = g_current_zvalue;
   block->steps_z = labs(target[Z_AXIS]-pl.position[Z_AXIS]);
   block->step_event_count = max(block->steps_x, max(block->steps_y, block->steps_z));
 

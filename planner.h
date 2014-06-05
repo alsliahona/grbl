@@ -42,7 +42,6 @@ typedef struct {
   // Fields used by the bresenham algorithm for tracing the line
   uint8_t  direction_bits;            // The direction bit set for this block (refers to *_DIRECTION_BIT in config.h)
   uint8_t z_value;						// Used for $L1 laser mode to set z value as laser intensity instead of motor movement
-  uint8_t zset;							// ditto
   uint32_t steps_x, steps_y, steps_z; // Step count along each axis
   int32_t  step_event_count;          // The number of step events required to complete this block
 

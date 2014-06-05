@@ -157,6 +157,9 @@ ISR(TIMER1_COMPA_vect)
 {        
   if (busy) { return; } // The busy-flag is used to avoid reentering this interrupt
 
+#ifdef PIN11_PWM_OUTPUT
+  OCR2A = g_laser_setting; // Adjust laser intensity (but still allow OVF ISR to stop pin pulse on time)
+#endif
   // Set the direction pins a couple of nanoseconds before we step the steppers
   STEPPING_PORT = (STEPPING_PORT & ~DIRECTION_MASK) | (out_bits & DIRECTION_MASK);
   // Then pulse the stepping pins
@@ -230,14 +233,12 @@ ISR(TIMER1_COMPA_vect)
 		if (out_bits & (1<<Z_DIRECTION_BIT)) { sys.position[Z_AXIS]--; }
 		else { sys.position[Z_AXIS]++; }
 	}
-
-	if(g_laser_mode && 
-		current_block->zset && 
-		g_laser_setting != current_block->z_value)
+	else if(g_laser_mode)
 	{
-		g_laser_setting = current_block->z_value;
-		pin_11_pwm(g_laser_setting);		// Adjust laser intensity (but still allow OVF ISR to stop pin pulse on time)
+		sys.position[Z_AXIS] = g_laser_setting;
 	}
+
+	g_laser_setting = current_block->z_value;
     
     st.step_events_completed++; // Iterate step events
 
@@ -405,6 +406,11 @@ void st_init()
   TIMSK0 |= (1<<TOIE0); // Enable Timer0 overflow interrupt
   Z_AXIS_PWM_DDR |= (1 << Z_AXIS_PWM_BIT);	// OUTPUT mode on PIN 11
   Z_AXIS_PWM_PORT &= (1 << Z_AXIS_PWM_BIT);	// Start at 0!
+  //
+  // Start the timer output to Pin 11, PWM pulse 0
+  TCCR2A = (1 << COM2A1) | (1 << WGM21) | (1 << WGM20);
+  TCCR2B = (TCCR2B & 0b11111000) | 0x02; // set to 1/8 Prescaler
+  OCR2A = 0;
 #ifdef STEP_PULSE_DELAY
   TIMSK0 |= (1<<OCIE0A); // Enable Timer0 Compare Match A interrupt
 #endif
@@ -523,7 +529,6 @@ uint8_t laser_mode_enabled()
 void pin_11_pwm(uint8_t value)		// value is analog 0 - 255 (0 to 5v)
 {
 #ifdef PIN11_PWM_OUTPUT
-	Z_AXIS_PWM_DDR |= (1 << Z_AXIS_PWM_BIT);	// OUTPUT mode on PIN 11
 	if(value == 0)
 	{
 		TCCR2A &= ~(1 << COM2A1);  // Output voltage is zero on PIN 11
