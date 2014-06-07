@@ -394,6 +394,14 @@ void plan_buffer_line(float x, float y, float z, float feed_rate, uint8_t invert
   block->steps_z = labs(target[Z_AXIS]-pl.position[Z_AXIS]);
   block->step_event_count = max(block->steps_x, max(block->steps_y, block->steps_z));
 
+  //
+  // Make sure a solitary Z value gets action in the stepper...
+  if(zset && block->step_event_count == 0)
+  {
+	  block->step_event_count = 2;
+	  block->steps_z = 2;
+  }
+
   // Bail if this is a zero-length block
   if (block->step_event_count == 0) { return; };
   
@@ -499,7 +507,6 @@ void plan_buffer_line(float x, float y, float z, float feed_rate, uint8_t invert
   
   // Update planner position
   memcpy(pl.position, target, sizeof(target)); // pl.position[] = target[]
-
   planner_recalculate(); 
 }
 
