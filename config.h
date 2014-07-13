@@ -40,7 +40,7 @@
 #define DEFAULTS_SHAPEOKO_2
 
 // Serial baud rate
-#define BAUD_RATE 9600
+#define BAUD_RATE 115200
 
 // Default pin mappings. Grbl officially supports the Arduino Uno only. Other processor types
 // may exist from user-supplied templates or directly user-defined in pin_map.h
